@@ -36,6 +36,10 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
             entity.Property(x => x.DamageCost)
                 .HasElementName("damageCost")
                 .IsRequired();
+
+            entity.Property(x => x.DateCreated)
+                .HasElementName("dateCreated")
+                .IsRequired();
         });
 
         modelBuilder.Entity<Cover>(entity =>
@@ -53,6 +57,10 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
 
             entity.Property(x => x.Premium)
                 .HasElementName("premium");
+
+            entity.Property(x => x.DateCreated)
+                .HasElementName("dateCreated")
+                .IsRequired();
         });
     }
 }

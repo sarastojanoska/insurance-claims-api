@@ -4,6 +4,9 @@ namespace Application.Services.PremiumCalculationService
 {
     public interface IPremiumCalculationService
     {
-        decimal ComputePremiumAsync(DateTime startDate, DateTime endDate, CoverType coverType);
+        decimal ComputePremium(
+            DateTime startDate,
+            DateTime endDate,
+            CoverType coverType);
     }
 }

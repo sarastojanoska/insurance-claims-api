@@ -1,4 +1,5 @@
 using API.Extensions;
+using API.Filters;
 using Infastructure.Context.AppDbContext;
 using Infastructure.Context.AuditContext;
 using Microsoft.EntityFrameworkCore;
@@ -8,24 +9,8 @@ using Testcontainers.MsSql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Start Testcontainers for SQL Server and MongoDB
-//var sqlContainer = (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-//        ? new MsSqlBuilder()
-//            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-//        : new()
-
-//    ).Build();
-
-//var mongoContainer = new MongoDbBuilder()
-//    .WithImage("mongo:latest")
-//    .Build();
-
-//await sqlContainer.StartAsync();
-//await mongoContainer.StartAsync();
-
-// Add services to the container.
 builder.Services
-    .AddControllers()
+    .AddControllers(options => options.Filters.Add<ResponseModelStatusCodeFilter>())
     .AddJsonOptions(x =>
     {
         x.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -52,7 +37,7 @@ builder.Services.AddApplicationServices();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options => options.EnableAnnotations());
 
 var app = builder.Build();
 
@@ -73,11 +58,9 @@ if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
 
-    // SQL Server: apply pending EF Core migrations.
     var auditContext = scope.ServiceProvider.GetRequiredService<AuditContext>();
     auditContext.Database.Migrate();
 
-    // MongoDB: no migrations support, so just ensure collections/indexes exist.
     var appDbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     appDbContext.Database.EnsureCreated();
 }

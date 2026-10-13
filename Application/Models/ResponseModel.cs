@@ -2,7 +2,7 @@
 
 namespace Application.Models
 {
-    public class ResponseModel<T> where T : class
+    public class ResponseModel<T> : IResponseModel
     {
         public int StatusCode { get; set; }
         public bool Success { get; set; }

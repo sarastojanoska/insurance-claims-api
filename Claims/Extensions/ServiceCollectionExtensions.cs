@@ -1,4 +1,5 @@
 ﻿using Application.Abstractions;
+using Application.Claims.Queries;
 using Application.Services.AuditService;
 using Application.Services.ClaimService;
 using Application.Services.CoverService;
@@ -16,6 +17,9 @@ namespace API.Extensions
     {
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
+            services.AddMediatR(configuration =>
+                configuration.RegisterServicesFromAssemblyContaining<GetClaimsQuery>());
+
             services.AddScoped<ICoverService, CoverService>();
             services.AddScoped<IClaimService, ClaimService>();
             services.AddScoped<IAuditService, AuditService>();

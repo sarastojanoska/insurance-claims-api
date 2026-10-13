@@ -1,4 +1,5 @@
 ﻿using Application.DTOs;
+using Application.Models;
 using Domain.Entities;
 
 namespace Application.Services.ClaimService
@@ -7,8 +8,8 @@ namespace Application.Services.ClaimService
     {
         Task<IEnumerable<Claim>> GetClaimsAsync();
         Task<Claim?> GetClaimAsync(string id);
-        Task<Claim?> CreateClaimAsync(CreateClaimDto item);
-        Task<int> UpdateClaimAsync(string id, UpdateClaimDto item);
-        Task<Claim?> DeleteClaimAsync(string id);
+        Task<ServiceResponseModel<Claim?>> CreateClaimAsync(CreateClaimDto item);
+        Task<ServiceResponseModel<Claim>> UpdateClaimAsync(string id, UpdateClaimDto item);
+        Task<ServiceResponseModel<Claim>> DeleteClaimAsync(string id);
     }
 }

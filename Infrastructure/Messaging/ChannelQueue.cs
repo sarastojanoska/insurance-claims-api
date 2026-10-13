@@ -7,11 +7,11 @@ namespace Infastructure.Messaging
     {
         private readonly Channel<T> _channel;
 
-        public ChannelQueue(int capacity = 1000) // arbitrary number for simulation purposes
+        public ChannelQueue(int capacity = 1000)
         {
             var options = new BoundedChannelOptions(capacity)
             {
-                FullMode = BoundedChannelFullMode.Wait  // backpressure control, blocks producer when the channel is full
+                FullMode = BoundedChannelFullMode.Wait  
             };
 
             _channel = Channel.CreateBounded<T>(options);
