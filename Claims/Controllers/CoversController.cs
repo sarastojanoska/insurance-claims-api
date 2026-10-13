@@ -1,98 +1,107 @@
-using Claims.Auditing;
+using Application.Abstractions;
+using Application.DTOs;
+using Application.Models;
+using Application.Services.CoverService;
+using Application.Services.PremiumCalculationService;
+using Domain.Entities;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using System.Net;
 
-namespace Claims.Controllers;
+namespace API.Controllers;
 
 [ApiController]
-[Route("[controller]")]
-public class CoversController : ControllerBase
+[Route("api/[controller]")]
+public class CoversController(ICoverService coverService,
+                              IPremiumCalculationService premiumCalculationService,
+                              IChannelQueue<AuditLog> channelQueue,
+                              ILogger<CoversController> logger) : ControllerBase
 {
-    private readonly ClaimsContext _claimsContext;
-    private readonly ILogger<CoversController> _logger;
-    private readonly Auditer _auditer;
-
-    public CoversController(ClaimsContext claimsContext, AuditContext auditContext, ILogger<CoversController> logger)
-    {
-        _claimsContext = claimsContext;
-        _logger = logger;
-        _auditer = new Auditer(auditContext);
-    }
-
     [HttpPost("compute")]
     public async Task<ActionResult> ComputePremiumAsync(DateTime startDate, DateTime endDate, CoverType coverType)
     {
-        return Ok(ComputePremium(startDate, endDate, coverType));
+        return Ok(premiumCalculationService.ComputePremiumAsync(startDate, endDate, coverType));
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Cover>>> GetAsync()
+    public async Task<ActionResult<ResponseModel<IEnumerable<Cover>>>> GetAsync()
     {
-        var results = await _claimsContext.Covers.ToListAsync();
-        return Ok(results);
+        var data = await coverService.GetCoversAsync();
+        return ResponseModel<IEnumerable<Cover>>.SuccessResult(data);
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<Cover>> GetAsync(string id)
+    public async Task<ActionResult<ResponseModel<Cover>>> GetAsync(string id)
     {
-        var results = await _claimsContext.Covers.ToListAsync();
-        return Ok(results.SingleOrDefault(cover => cover.Id == id));
+        var result = await coverService.GetCoverAsync(id);
+
+        if (result != null)
+            return ResponseModel<Cover>.SuccessResult(result);
+
+        return ResponseModel<Cover>.FailureResult("Not found", HttpStatusCode.NotFound);
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateAsync(Cover cover)
+    public async Task<ActionResult<ResponseModel<Cover>>> CreateAsync(CreateCoverDto coverDto, CancellationToken cancellationToken)
     {
-        cover.Id = Guid.NewGuid().ToString();
-        cover.Premium = ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
-        _claimsContext.Covers.Add(cover);
-        await _claimsContext.SaveChangesAsync();
-        _auditer.AuditCover(cover.Id, "POST");
-        return Ok(cover);
+        var result = await coverService.CreateCoverAsync(coverDto);
+
+        if (result != null)
+        {
+            var auditLog = new AuditLog
+            {
+                EntityName = EntityNameEnum.Cover,
+                EntityId = result.Id,
+                Type = HttpRequestTypeEnum.POST,
+            };
+
+            await channelQueue.EnqueueAsync(auditLog, cancellationToken);
+            return ResponseModel<Cover>.SuccessResult(result, statusCode: HttpStatusCode.Created);
+        }
+
+        return ResponseModel<Cover>.FailureResult("Failed to create cover");
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult<ResponseModel<Cover>>> UpdateAsync(string id, [FromBody] UpdateCoverDto coverDto)
+    {
+        var result = await coverService.UpdateCoverAsync(id, coverDto);
+
+        if (result > 0)
+        {
+            var auditLog = new AuditLog
+            {
+                EntityName = EntityNameEnum.Cover,
+                EntityId = id,
+                Type = HttpRequestTypeEnum.PUT,
+            };
+
+            await channelQueue.EnqueueAsync(auditLog);
+            return ResponseModel<Cover>.SuccessResult(null, statusCode: HttpStatusCode.Accepted);
+        }
+
+        return ResponseModel<Cover>.FailureResult("Cover not found or failed to update.");
     }
 
     [HttpDelete("{id}")]
-    public async Task DeleteAsync(string id)
+    public async Task<ActionResult<ResponseModel<Cover>>> DeleteAsync(string id, CancellationToken cancellationToken)
     {
-        _auditer.AuditCover(id, "DELETE");
-        var cover = await _claimsContext.Covers.Where(cover => cover.Id == id).SingleOrDefaultAsync();
-        if (cover is not null)
-        {
-            _claimsContext.Covers.Remove(cover);
-            await _claimsContext.SaveChangesAsync();
-        }
-    }
+        var result = await coverService.DeleteCoverAsync(id);
 
-    private decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
-    {
-        var multiplier = 1.3m;
-        if (coverType == CoverType.Yacht)
+        if (result != null)
         {
-            multiplier = 1.1m;
+            var auditLog = new AuditLog
+            {
+                EntityName = EntityNameEnum.Cover,
+                EntityId = result.Id,
+                Type = HttpRequestTypeEnum.DELETE,
+            };
+
+            await channelQueue.EnqueueAsync(auditLog, cancellationToken);
+            return ResponseModel<Cover>.SuccessResult(result);
         }
 
-        if (coverType == CoverType.PassengerShip)
-        {
-            multiplier = 1.2m;
-        }
-
-        if (coverType == CoverType.Tanker)
-        {
-            multiplier = 1.5m;
-        }
-
-        var premiumPerDay = 1250 * multiplier;
-        var insuranceLength = (endDate - startDate).TotalDays;
-        var totalPremium = 0m;
-
-        for (var i = 0; i < insuranceLength; i++)
-        {
-            if (i < 30) totalPremium += premiumPerDay;
-            if (i < 180 && coverType == CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.05m;
-            else if (i < 180) totalPremium += premiumPerDay - premiumPerDay * 0.02m;
-            if (i < 365 && coverType != CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.03m;
-            else if (i < 365) totalPremium += premiumPerDay - premiumPerDay * 0.08m;
-        }
-
-        return totalPremium;
+        logger.LogError("Cover not found or delete operation failed.");
+        return ResponseModel<Cover>.FailureResult("Failed to delete cover");
     }
 }

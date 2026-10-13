@@ -1,99 +1,99 @@
-using Claims.Auditing;
+using Application.Abstractions;
+using Application.DTOs;
+using Application.Models;
+using Application.Services.ClaimService;
+using Domain.Entities;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MongoDB.EntityFrameworkCore.Extensions;
+using System.Net;
 
-
-namespace Claims.Controllers
+namespace API.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
-    public class ClaimsController : ControllerBase
+    [Route("api/[controller]")]
+    public class ClaimsController(IClaimService claimService, IChannelQueue<AuditLog> channelQueue, ILogger<ClaimsController> logger)
+        : ControllerBase
     {
-        private readonly ILogger<ClaimsController> _logger;
-        private readonly ClaimsContext _claimsContext;
-        private readonly Auditer _auditer;
-
-        public ClaimsController(ILogger<ClaimsController> logger, ClaimsContext claimsContext, AuditContext auditContext)
+        [HttpGet]   // TODO: Complete swagger documentation
+        public async Task<ActionResult<ResponseModel<IEnumerable<Claim>>>> GetClaimsAsync()
         {
-            _logger = logger;
-            _claimsContext = claimsContext;
-            _auditer = new Auditer(auditContext);
-        }
-
-        [HttpGet]
-        public async Task<IEnumerable<Claim>> GetAsync()
-        {
-            return await _claimsContext.GetClaimsAsync();
-        }
-
-        [HttpPost]
-        public async Task<ActionResult> CreateAsync(Claim claim)
-        {
-            claim.Id = Guid.NewGuid().ToString();
-            await _claimsContext.AddItemAsync(claim);
-            _auditer.AuditClaim(claim.Id, "POST");
-            return Ok(claim);
-        }
-
-        [HttpDelete("{id}")]
-        public async Task DeleteAsync(string id)
-        {
-            _auditer.AuditClaim(id, "DELETE");
-            await _claimsContext.DeleteItemAsync(id);
+            var claims = await claimService.GetClaimsAsync();
+            return ResponseModel<IEnumerable<Claim>>.SuccessResult(claims);
         }
 
         [HttpGet("{id}")]
-        public async Task<Claim> GetAsync(string id)
+        public async Task<ActionResult<ResponseModel<Claim>>> GetClaimAsync(string id)
         {
-            return await _claimsContext.GetClaimAsync(id);
-        }
-    }
+            var claim = await claimService.GetClaimAsync(id);
 
-    public class ClaimsContext : DbContext
-    {
+            if (claim != null)
+                return ResponseModel<Claim>.SuccessResult(claim);
 
-        private DbSet<Claim> Claims { get; init; }
-        public DbSet<Cover>  Covers { get; init; }
-
-        public ClaimsContext(DbContextOptions options)
-            : base(options)
-        {
+            return ResponseModel<Claim>.FailureResult("Claim not found");
         }
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        [HttpPost]
+        public async Task<ActionResult<ResponseModel<Claim>>> CreateAsync(CreateClaimDto claimDto)
         {
-            base.OnModelCreating(modelBuilder);
-            modelBuilder.Entity<Claim>().ToCollection("claims");
-            modelBuilder.Entity<Cover>().ToCollection("covers");
-        }
+            var result = await claimService.CreateClaimAsync(claimDto);
 
-        public async Task<IEnumerable<Claim>> GetClaimsAsync()
-        {
-            return await Claims.ToListAsync();
-        }
-
-        public async Task<Claim> GetClaimAsync(string id)
-        {
-            return await Claims
-                .Where(claim => claim.Id == id)
-                .SingleOrDefaultAsync();
-        }
-
-        public async Task AddItemAsync(Claim item)
-        {
-            Claims.Add(item);
-            await SaveChangesAsync();
-        }
-
-        public async Task DeleteItemAsync(string id)
-        {
-            var claim = await GetClaimAsync(id);
-            if (claim is not null)
+            if (result != null)
             {
-                Claims.Remove(claim);
-                await SaveChangesAsync();
+                var auditLog = new AuditLog
+                {
+                    EntityName = EntityNameEnum.Claim,
+                    EntityId = result.Id,
+                    Type = HttpRequestTypeEnum.POST,
+                };
+
+                await channelQueue.EnqueueAsync(auditLog);
+                return ResponseModel<Claim>.SuccessResult(result, statusCode: HttpStatusCode.Created);
             }
+
+            return ResponseModel<Claim>.FailureResult("Failed to create claim");
+        }
+
+        [HttpPut("{id}")]
+        public async Task<ActionResult<ResponseModel<Claim>>> UpdateAsync(string id, [FromBody] UpdateClaimDto claimDto)
+        {
+            var result = await claimService.UpdateClaimAsync(id, claimDto);
+
+            if (result > 0)
+            {
+                var auditLog = new AuditLog
+                {
+                    EntityName = EntityNameEnum.Claim,
+                    EntityId = id,
+                    Type = HttpRequestTypeEnum.PUT
+                };
+
+                await channelQueue.EnqueueAsync(auditLog);
+                return ResponseModel<Claim>.SuccessResult(null, statusCode: HttpStatusCode.Accepted);
+            }
+
+            return ResponseModel<Claim>.FailureResult("Claim not found or failed to update");
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult<ResponseModel<Claim>>> DeleteAsync(string id)
+        {
+            var result = await claimService.DeleteClaimAsync(id);
+
+            if (result != null)
+            {
+                var auditLog = new AuditLog
+                {
+                    EntityName = EntityNameEnum.Claim,
+                    EntityId = result.Id,
+                    Type = HttpRequestTypeEnum.DELETE
+                };
+
+                await channelQueue.EnqueueAsync(auditLog);
+                return ResponseModel<Claim>.SuccessResult(result);
+            }
+
+            logger.LogError("Claim not found or delete operation failed.");
+            return ResponseModel<Claim>.FailureResult("Failed to delete the claim");
         }
     }
 }
