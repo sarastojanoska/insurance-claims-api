@@ -1,98 +1,52 @@
-using Claims.Auditing;
+using Application.Covers.Commands;
+using Application.Covers.Queries;
+using Application.DTOs;
+using Application.Models;
+using Domain.Entities;
+using Domain.Enums;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Swashbuckle.AspNetCore.Annotations;
 
-namespace Claims.Controllers;
+namespace API.Controllers;
 
 [ApiController]
-[Route("[controller]")]
-public class CoversController : ControllerBase
+[Route("api/[controller]")]
+public class CoversController(ISender sender) : ControllerBase
 {
-    private readonly ClaimsContext _claimsContext;
-    private readonly ILogger<CoversController> _logger;
-    private readonly Auditer _auditer;
-
-    public CoversController(ClaimsContext claimsContext, AuditContext auditContext, ILogger<CoversController> logger)
-    {
-        _claimsContext = claimsContext;
-        _logger = logger;
-        _auditer = new Auditer(auditContext);
-    }
-
     [HttpPost("compute")]
-    public async Task<ActionResult> ComputePremiumAsync(DateTime startDate, DateTime endDate, CoverType coverType)
-    {
-        return Ok(ComputePremium(startDate, endDate, coverType));
-    }
+    [SwaggerOperation(Summary = "Compute a cover premium",
+        Description = "Accepts startDate, endDate, and coverType as query parameters; no JSON body is required. Returns HTTP 200 with a numeric premium in ResponseModel.data without saving a cover or creating an audit. The base daily rate is 1250, increased by 10% for Yacht, 20% for PassengerShip, 50% for Tanker, and 30% for other types. The first 30 days use the full rate; the next 150 days receive a 5% Yacht or 2% other-type discount; remaining days receive an 8% Yacht or 3% other-type total discount. Calendar days are counted with the end date excluded. Unlike cover creation, past dates and periods longer than one year are allowed. A reversed calendar-date range currently throws an unhandled exception and may return HTTP 500.")]
+    public async Task<ActionResult<ResponseModel<decimal>>> ComputePremiumAsync(DateTime startDate, DateTime endDate, CoverType coverType, CancellationToken cancellationToken = default)
+        => await sender.Send(new ComputePremiumQuery(startDate, endDate, coverType), cancellationToken);
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Cover>>> GetAsync()
-    {
-        var results = await _claimsContext.Covers.ToListAsync();
-        return Ok(results);
-    }
+    [SwaggerOperation(Summary = "List all covers",
+        Description = "Returns HTTP 200 with all covers in ResponseModel.data. An empty collection returns an empty array. No pagination, filtering, or sorting parameters are supported.")]
+    public async Task<ActionResult<ResponseModel<IEnumerable<Cover>>>> GetAsync(CancellationToken cancellationToken = default)
+        => await sender.Send(new GetCoversQuery(), cancellationToken);
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<Cover>> GetAsync(string id)
-    {
-        var results = await _claimsContext.Covers.ToListAsync();
-        return Ok(results.SingleOrDefault(cover => cover.Id == id));
-    }
+    [SwaggerOperation(Summary = "Get a cover by ID",
+        Description = "Accepts a cover ID in the route and returns HTTP 200 with the cover and calculated premium in ResponseModel.data. A missing cover returns HTTP 404 with the message 'Not found'.")]
+    public async Task<ActionResult<ResponseModel<Cover>>> GetAsync(string id, CancellationToken cancellationToken = default)
+        => await sender.Send(new GetCoverQuery(id), cancellationToken);
 
     [HttpPost]
-    public async Task<ActionResult> CreateAsync(Cover cover)
-    {
-        cover.Id = Guid.NewGuid().ToString();
-        cover.Premium = ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
-        _claimsContext.Covers.Add(cover);
-        await _claimsContext.SaveChangesAsync();
-        _auditer.AuditCover(cover.Id, "POST");
-        return Ok(cover);
-    }
+    [SwaggerOperation(Summary = "Create a cover",
+        Description = "Accepts startDate, endDate, and type in a JSON body. Cover types are Yacht, PassengerShip, ContainerShip, BulkCarrier, and Tanker. The start calendar date cannot precede the server's local current date. End date cannot precede start date or exceed startDate.AddYears(1). The premium is calculated automatically. Returns HTTP 201 with the created cover, or HTTP 400 with the service validation message. Successful creation enqueues an audit record.")]
+    public async Task<ActionResult<ResponseModel<Cover>>> CreateAsync(CreateCoverDto coverDto, CancellationToken cancellationToken)
+        => await sender.Send(new CreateCoverCommand(coverDto), cancellationToken);
+
+    [HttpPut("{id}")]
+    [SwaggerOperation(Summary = "Update a cover",
+        Description = "Accepts a cover ID in the route and startDate, endDate, and type in a JSON body. The same date rules as cover creation apply, including rejecting start dates in the past. The premium is recalculated automatically. Returns HTTP 202 with null data after saving, or HTTP 400 when the cover is missing or validation fails. Retrieve the cover to see its updated premium. Existing claims are not revalidated against the changed dates. Successful update enqueues an audit record.")]
+    public async Task<ActionResult<ResponseModel<Cover>>> UpdateAsync(string id, [FromBody] UpdateCoverDto coverDto, CancellationToken cancellationToken = default)
+        => await sender.Send(new UpdateCoverCommand(id, coverDto), cancellationToken);
 
     [HttpDelete("{id}")]
-    public async Task DeleteAsync(string id)
-    {
-        _auditer.AuditCover(id, "DELETE");
-        var cover = await _claimsContext.Covers.Where(cover => cover.Id == id).SingleOrDefaultAsync();
-        if (cover is not null)
-        {
-            _claimsContext.Covers.Remove(cover);
-            await _claimsContext.SaveChangesAsync();
-        }
-    }
-
-    private decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
-    {
-        var multiplier = 1.3m;
-        if (coverType == CoverType.Yacht)
-        {
-            multiplier = 1.1m;
-        }
-
-        if (coverType == CoverType.PassengerShip)
-        {
-            multiplier = 1.2m;
-        }
-
-        if (coverType == CoverType.Tanker)
-        {
-            multiplier = 1.5m;
-        }
-
-        var premiumPerDay = 1250 * multiplier;
-        var insuranceLength = (endDate - startDate).TotalDays;
-        var totalPremium = 0m;
-
-        for (var i = 0; i < insuranceLength; i++)
-        {
-            if (i < 30) totalPremium += premiumPerDay;
-            if (i < 180 && coverType == CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.05m;
-            else if (i < 180) totalPremium += premiumPerDay - premiumPerDay * 0.02m;
-            if (i < 365 && coverType != CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.03m;
-            else if (i < 365) totalPremium += premiumPerDay - premiumPerDay * 0.08m;
-        }
-
-        return totalPremium;
-    }
+    [SwaggerOperation(Summary = "Delete a cover",
+        Description = "Accepts a cover ID in the route and no request body. Returns HTTP 200 with the deleted cover in ResponseModel.data, or HTTP 400 when the cover is missing. Related claims are not explicitly deleted and their existence does not block this operation. Successful deletion enqueues an audit record.")]
+    public async Task<ActionResult<ResponseModel<Cover>>> DeleteAsync(string id, CancellationToken cancellationToken)
+        => await sender.Send(new DeleteCoverCommand(id), cancellationToken);
 }
