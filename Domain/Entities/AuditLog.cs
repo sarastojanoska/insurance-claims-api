@@ -5,6 +5,7 @@ namespace Domain.Entities
     public class AuditLog
     {
         public Guid Id { get; set; } = Guid.CreateVersion7();
+
         public EntityNameEnum EntityName { get; set; }
 
         public string EntityId { get; set; } = string.Empty;

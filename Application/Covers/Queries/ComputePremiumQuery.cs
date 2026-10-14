@@ -5,11 +5,9 @@ using MediatR;
 
 namespace Application.Covers.Queries;
 
-public sealed record ComputePremiumQuery(DateTime StartDate, DateTime EndDate, CoverType CoverType)
-    : IRequest<ResponseModel<decimal>>;
+public record ComputePremiumQuery(DateTime StartDate, DateTime EndDate, CoverType CoverType) : IRequest<ResponseModel<decimal>>;
 
-public sealed class ComputePremiumQueryHandler(IPremiumCalculationService premiumCalculationService)
-    : IRequestHandler<ComputePremiumQuery, ResponseModel<decimal>>
+public class ComputePremiumQueryHandler(IPremiumCalculationService premiumCalculationService) : IRequestHandler<ComputePremiumQuery, ResponseModel<decimal>>
 {
     public Task<ResponseModel<decimal>> Handle(ComputePremiumQuery request, CancellationToken cancellationToken)
     {

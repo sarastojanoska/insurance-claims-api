@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
-    <Folder Include="Configurations\" />
     <Folder Include="Migrations\Audit\" />
   </ItemGroup>
 

@@ -4,7 +4,6 @@ using Application.Services.AuditService;
 using Application.Services.ClaimService;
 using Application.Services.CoverService;
 using Application.Services.PremiumCalculationService;
-using Infastructure.Messaging;
 using Infrastructure.Messaging;
 using Services.AuditService;
 using Services.ClaimService;

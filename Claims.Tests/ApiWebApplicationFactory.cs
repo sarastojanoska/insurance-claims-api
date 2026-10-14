@@ -3,7 +3,7 @@ using Application.DTOs;
 using Application.Models;
 using Domain.Entities;
 using Domain.Enums;
-using Infastructure.Context.AppDbContext;
+using Infrastructure.Context.AppDbContext;
 using Infrastructure.Messaging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;

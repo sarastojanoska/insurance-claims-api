@@ -2,7 +2,7 @@
 using Application.Models;
 using Application.Services.ClaimService;
 using Domain.Entities;
-using Infastructure.Context.AppDbContext;
+using Infrastructure.Context.AppDbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -18,17 +18,14 @@ namespace Services.ClaimService
 
             if (claim == null)
             {
-                logger.LogError("Claim not found");
+                logger.LogError("Claim {ClaimId} not found", id);
                 return null;
             }
 
             return claim;
         }
 
-
-
-        public async Task<ServiceResponseModel<Claim>> CreateClaimAsync(
-            CreateClaimDto item)
+        public async Task<ServiceResponseModel<Claim>> CreateClaimAsync(CreateClaimDto item)
         {
             var cover = await context.Covers
                 .AsNoTracking()
@@ -37,9 +34,7 @@ namespace Services.ClaimService
             if (cover == null)
             {
                 logger.LogWarning("Cover {CoverId} not found.", item.CoverId);
-
-                return ServiceResponseModel<Claim>.FailureResult(
-                    "Cover not found.");
+                return ServiceResponseModel<Claim>.FailureResult("Cover not found.");
             }
 
             var createdDate = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
@@ -52,12 +47,8 @@ namespace Services.ClaimService
 
             if (validationError is not null)
             {
-                logger.LogWarning(
-                    "Claim creation failed: {Error}",
-                    validationError);
-
-                return ServiceResponseModel<Claim>.FailureResult(
-                    validationError);
+                logger.LogWarning("Claim creation failed: {Error}", validationError);
+                return ServiceResponseModel<Claim>.FailureResult(validationError);
             }
 
             var claim = new Claim
@@ -75,40 +66,30 @@ namespace Services.ClaimService
             return ServiceResponseModel<Claim>.SuccessResult(claim);
         }
 
-
         public async Task<ServiceResponseModel<Claim>> DeleteClaimAsync(string id)
         {
             var claim = await context.Claims.FirstOrDefaultAsync(c => c.Id == id);
 
             if (claim is null)
             {
-                logger.LogWarning("Cannot delete claim {ClaimId}: claim was not found.", id);
-
-                return ServiceResponseModel<Claim>.FailureResult(
-                    $"Claim with ID '{id}' was not found.");
+                logger.LogWarning("Cannot delete claim {id}: claim was not found.", id);
+                return ServiceResponseModel<Claim>.FailureResult($"Claim with ID '{id}' was not found.");
             }
             var result = context.Claims.Remove(claim);
             await context.SaveChangesAsync();
 
             logger.LogInformation("Claim {ClaimId} deleted successfully.", id);
-
             return ServiceResponseModel<Claim>.SuccessResult(claim);
         }
 
-
-        public async Task<ServiceResponseModel<Claim>> UpdateClaimAsync(
-            string id,
-            UpdateClaimDto item)
+        public async Task<ServiceResponseModel<Claim>> UpdateClaimAsync(string id, UpdateClaimDto item)
         {
-            var claim = await context.Claims
-                .FirstOrDefaultAsync(c => c.Id == id);
+            var claim = await context.Claims.FirstOrDefaultAsync(c => c.Id == id);
 
             if (claim == null)
             {
                 logger.LogWarning("Claim {ClaimId} not found.", id);
-
-                return ServiceResponseModel<Claim>.FailureResult(
-                    "Claim not found.");
+                return ServiceResponseModel<Claim>.FailureResult("Claim not found.");
             }
 
             var cover = await context.Covers
@@ -117,13 +98,8 @@ namespace Services.ClaimService
 
             if (cover == null)
             {
-                logger.LogWarning(
-                    "Cover {CoverId} associated with claim {ClaimId} not found.",
-                    claim.CoverId,
-                    id);
-
-                return ServiceResponseModel<Claim>.FailureResult(
-                    "Related cover not found.");
+                logger.LogWarning("Cover {CoverId} associated with claim {ClaimId} not found.", claim.CoverId, id);
+                return ServiceResponseModel<Claim>.FailureResult("Related cover not found.");
             }
 
             var validationError = ValidateClaim(
@@ -134,13 +110,8 @@ namespace Services.ClaimService
 
             if (validationError is not null)
             {
-                logger.LogWarning(
-                    "Claim update failed for {ClaimId}: {Error}",
-                    id,
-                    validationError);
-
-                return ServiceResponseModel<Claim>.FailureResult(
-                    validationError);
+                logger.LogWarning("Claim update failed for {ClaimId}: {Error}", id, validationError);
+                return ServiceResponseModel<Claim>.FailureResult(validationError);
             }
 
             claim.Name = item.Name;
@@ -152,12 +123,7 @@ namespace Services.ClaimService
             return ServiceResponseModel<Claim>.SuccessResult(claim);
         }
 
-
-        private static string? ValidateClaim(
-            decimal damageCost,
-            DateTime createdDate,
-            DateTime coverStartDate,
-            DateTime coverEndDate)
+        private static string? ValidateClaim(decimal damageCost, DateTime createdDate, DateTime coverStartDate, DateTime coverEndDate)
         {
             if (damageCost > 100_000)
             {
@@ -171,6 +137,5 @@ namespace Services.ClaimService
 
             return null;
         }
-
     }
 }

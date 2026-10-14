@@ -1,10 +1,10 @@
 ﻿using Domain.Entities;
+using Infrastructure.Configurations;
 using Microsoft.EntityFrameworkCore;
 
-namespace Infastructure.Context.AuditContext
+namespace Infrastructure.Context.AuditContext
 {
-    public class AuditContext(DbContextOptions<AuditContext> options) 
-        : DbContext(options)
+    public class AuditContext(DbContextOptions<AuditContext> options) : DbContext(options)
     {
         public DbSet<AuditLog> AuditLogs { get; set; }
 
@@ -12,12 +12,7 @@ namespace Infastructure.Context.AuditContext
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<AuditLog>()
-                .HasKey(e => e.Id);
-
-            modelBuilder.Entity<AuditLog>()
-                .Property(e => e.EntityId)
-                .IsRequired(true);
+            modelBuilder.ApplyConfiguration(new AuditConfiguration());
         }
     }
 }

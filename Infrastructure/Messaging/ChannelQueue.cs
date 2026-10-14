@@ -1,7 +1,7 @@
 ﻿using Application.Abstractions;
 using System.Threading.Channels;
 
-namespace Infastructure.Messaging
+namespace Infrastructure.Messaging
 {
     public class ChannelQueue<T> : IChannelQueue<T>
     {

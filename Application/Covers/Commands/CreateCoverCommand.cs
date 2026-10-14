@@ -9,14 +9,14 @@ using System.Net;
 
 namespace Application.Covers.Commands;
 
-public sealed record CreateCoverCommand(CreateCoverDto Cover) : IRequest<ResponseModel<Cover>>;
+public record CreateCoverCommand(CreateCoverDto Cover) : IRequest<ResponseModel<Cover>>;
 
-public sealed class CreateCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue)
-    : IRequestHandler<CreateCoverCommand, ResponseModel<Cover>>
+public class CreateCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue) : IRequestHandler<CreateCoverCommand, ResponseModel<Cover>>
 {
     public async Task<ResponseModel<Cover>> Handle(CreateCoverCommand request, CancellationToken cancellationToken)
     {
         var result = await coverService.CreateCoverAsync(request.Cover);
+
         if (!result.Success || result.Data is null)
             return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to create cover");
 

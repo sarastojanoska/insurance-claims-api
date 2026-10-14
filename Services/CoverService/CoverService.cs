@@ -3,7 +3,7 @@ using Application.Models;
 using Application.Services.CoverService;
 using Application.Services.PremiumCalculationService;
 using Domain.Entities;
-using Infastructure.Context.AppDbContext;
+using Infrastructure.Context.AppDbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -19,12 +19,10 @@ namespace Services.CoverService
 
             if (validationError is not null)
             {
-                logger.LogWarning(
-                    "Cover creation failed: {Error}",
-                    validationError);
-
+                logger.LogWarning("Cover creation failed: {Error}", validationError);
                 return ServiceResponseModel<Cover>.FailureResult(validationError);
             }
+
             var newCover = new Cover
             {
                 StartDate = cover.StartDate,
@@ -33,7 +31,7 @@ namespace Services.CoverService
                 Premium = premiumCalculationService.ComputePremium(cover.StartDate, cover.EndDate, cover.Type)
             };
 
-            var result = await context.Covers.AddAsync(newCover);
+            await context.Covers.AddAsync(newCover);
             await context.SaveChangesAsync();
 
             return ServiceResponseModel<Cover>.SuccessResult(newCover);
@@ -41,7 +39,9 @@ namespace Services.CoverService
 
         public async Task<Cover?> GetCoverAsync(string id)
         {
-            var cover = await context.Covers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            var cover = await context.Covers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id);
 
             if (cover == null)
             {
@@ -52,10 +52,7 @@ namespace Services.CoverService
             return cover;
         }
 
-
-        public async Task<ServiceResponseModel<Cover>> UpdateCoverAsync(
-            string id,
-            UpdateCoverDto item)
+        public async Task<ServiceResponseModel<Cover>> UpdateCoverAsync(string id, UpdateCoverDto item)
         {
             var cover = await context.Covers.FirstOrDefaultAsync(c => c.Id == id);
 
@@ -69,22 +66,14 @@ namespace Services.CoverService
 
             if (validationError is not null)
             {
-                logger.LogWarning(
-                    "Cover update failed for {CoverId}: {Error}",
-                    id,
-                    validationError);
-
+                logger.LogWarning("Cover update failed for {CoverId}: {Error}", id, validationError);
                 return ServiceResponseModel<Cover>.FailureResult(validationError);
             }
 
             cover.StartDate = item.StartDate;
             cover.EndDate = item.EndDate;
             cover.Type = item.Type;
-
-            cover.Premium = premiumCalculationService.ComputePremium(
-                item.StartDate,
-                item.EndDate,
-                item.Type);
+            cover.Premium = premiumCalculationService.ComputePremium(item.StartDate, item.EndDate, item.Type);
 
             await context.SaveChangesAsync();
 
@@ -109,9 +98,7 @@ namespace Services.CoverService
             return ServiceResponseModel<Cover>.SuccessResult(cover);
         }
 
-        private static string? ValidateCoverDates(
-            DateTime startDate,
-            DateTime endDate)
+        private static string? ValidateCoverDates(DateTime startDate, DateTime endDate)
         {
             if (startDate.Date < DateTime.Today)
             {
@@ -130,7 +117,5 @@ namespace Services.CoverService
 
             return null;
         }
-
-
     }
 }

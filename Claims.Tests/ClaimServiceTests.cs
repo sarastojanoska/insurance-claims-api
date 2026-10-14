@@ -1,7 +1,7 @@
 using Application.DTOs;
 using Domain.Entities;
 using Domain.Enums;
-using Infastructure.Context.AppDbContext;
+using Infrastructure.Context.AppDbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Services.ClaimService;

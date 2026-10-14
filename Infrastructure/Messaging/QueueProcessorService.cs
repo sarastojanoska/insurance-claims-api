@@ -18,13 +18,14 @@ namespace Infrastructure.Messaging
                 try
                 {
                     var workItem = await auditQueue.DequeueAsync(cancellationToken);
+
                     using var scope = serviceScopeFactory.CreateScope();
                     var auditService = scope.ServiceProvider.GetRequiredService<IAuditService>();
+
                     await auditService.AddAuditLogAsync(workItem);
                 }
                 catch (OperationCanceledException)
                 {
-                    // Just shutdown, cancelation token is invoked
                     break;
                 }
                 catch (Exception ex)

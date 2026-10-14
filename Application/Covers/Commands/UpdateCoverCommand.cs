@@ -9,14 +9,14 @@ using System.Net;
 
 namespace Application.Covers.Commands;
 
-public sealed record UpdateCoverCommand(string Id, UpdateCoverDto Cover) : IRequest<ResponseModel<Cover>>;
+public record UpdateCoverCommand(string Id, UpdateCoverDto Cover) : IRequest<ResponseModel<Cover>>;
 
-public sealed class UpdateCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue)
-    : IRequestHandler<UpdateCoverCommand, ResponseModel<Cover>>
+public class UpdateCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue) : IRequestHandler<UpdateCoverCommand, ResponseModel<Cover>>
 {
     public async Task<ResponseModel<Cover>> Handle(UpdateCoverCommand request, CancellationToken cancellationToken)
     {
         var result = await coverService.UpdateCoverAsync(request.Id, request.Cover);
+
         if (!result.Success)
             return ResponseModel<Cover>.FailureResult(result.Error ?? "Cover not found or failed to update.");
 

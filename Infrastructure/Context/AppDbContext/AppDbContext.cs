@@ -1,9 +1,8 @@
-﻿
-using Domain.Entities;
+﻿using Domain.Entities;
+using Infrastructure.Configurations;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.EntityFrameworkCore.Extensions;
 
-namespace Infastructure.Context.AppDbContext;
+namespace Infrastructure.Context.AppDbContext;
 
 public class AppDbContext(DbContextOptions options) : DbContext(options)
 {
@@ -14,53 +13,7 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<Claim>().ToCollection("claims");
-        modelBuilder.Entity<Cover>().ToCollection("covers");
-
-        modelBuilder.Entity<Claim>(entity =>
-        {
-            entity.HasKey(c => c.Id);
-            entity.Property(x => x.CoverId)
-                .HasElementName("coverId")
-                .IsRequired();
-
-            entity.Property(x => x.Name)
-                .HasElementName("name")
-                .IsRequired();
-
-            entity.Property(x => x.Type)
-                .HasElementName("claimType")
-                .HasConversion<string>()
-                .IsRequired();
-
-            entity.Property(x => x.DamageCost)
-                .HasElementName("damageCost")
-                .IsRequired();
-
-            entity.Property(x => x.DateCreated)
-                .HasElementName("dateCreated")
-                .IsRequired();
-        });
-
-        modelBuilder.Entity<Cover>(entity =>
-        {
-            entity.HasKey(c => c.Id);
-            entity.Property(x => x.StartDate)
-                .HasElementName("startDate");
-
-            entity.Property(x => x.EndDate)
-                .HasElementName("endDate");
-
-            entity.Property(x => x.Type)
-                .HasElementName("coverType")
-                .HasConversion<string>();
-
-            entity.Property(x => x.Premium)
-                .HasElementName("premium");
-
-            entity.Property(x => x.DateCreated)
-                .HasElementName("dateCreated")
-                .IsRequired();
-        });
+        modelBuilder.ApplyConfiguration(new ClaimConfiguration());
+        modelBuilder.ApplyConfiguration(new CoverConfiguration());
     }
 }

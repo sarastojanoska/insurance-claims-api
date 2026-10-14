@@ -11,8 +11,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ClaimsController(ISender sender)
-        : ControllerBase
+    public class ClaimsController(ISender sender) : ControllerBase
     {
         [HttpGet]  
         [SwaggerOperation(Summary = "List all claims",

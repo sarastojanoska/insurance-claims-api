@@ -1,6 +1,6 @@
 ﻿using Application.Services.AuditService;
 using Domain.Entities;
-using Infastructure.Context.AuditContext;
+using Infrastructure.Context.AuditContext;
 
 namespace Services.AuditService
 {
