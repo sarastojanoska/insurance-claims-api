@@ -10,7 +10,7 @@ namespace Services.ClaimService
 {
     public class ClaimService(AppDbContext context, ILogger<ClaimService> logger, TimeProvider? timeProvider = null) : IClaimService
     {
-        public async Task<IEnumerable<Claim>> GetClaimsAsync() => context.Claims.AsNoTracking().AsEnumerable();
+        public async Task<IEnumerable<Claim>> GetClaimsAsync() => await context.Claims.AsNoTracking().ToListAsync();
 
         public async Task<Claim?> GetClaimAsync(string id)
         {

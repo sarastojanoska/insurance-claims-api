@@ -80,7 +80,7 @@ namespace Services.CoverService
             return ServiceResponseModel<Cover>.SuccessResult(cover);
         }
 
-        public async Task<IEnumerable<Cover>> GetCoversAsync() => context.Covers.AsNoTracking().AsEnumerable();
+        public async Task<IEnumerable<Cover>> GetCoversAsync() => await context.Covers.AsNoTracking().ToListAsync();
 
         public async Task<ServiceResponseModel<Cover>> DeleteCoverAsync(string id)
         {

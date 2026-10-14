@@ -4,17 +4,18 @@ using Domain.Entities;
 using MediatR;
 using System.Net;
 
-namespace Application.Covers.Queries;
-
-public record GetCoverQuery(string Id) : IRequest<ResponseModel<Cover>>;
-
-public class GetCoverQueryHandler(ICoverService coverService) : IRequestHandler<GetCoverQuery, ResponseModel<Cover>>
+namespace Application.Covers.Queries
 {
-    public async Task<ResponseModel<Cover>> Handle(GetCoverQuery request, CancellationToken cancellationToken)
+    public record GetCoverQuery(string Id) : IRequest<ResponseModel<Cover>>;
+
+    public class GetCoverQueryHandler(ICoverService coverService) : IRequestHandler<GetCoverQuery, ResponseModel<Cover>>
     {
-        var cover = await coverService.GetCoverAsync(request.Id);
+        public async Task<ResponseModel<Cover>> Handle(GetCoverQuery request, CancellationToken cancellationToken)
+        {
+            var cover = await coverService.GetCoverAsync(request.Id);
         
-        return cover is not null ? ResponseModel<Cover>.SuccessResult(cover) 
-            : ResponseModel<Cover>.FailureResult("Not found", HttpStatusCode.NotFound);
+            return cover is not null ? ResponseModel<Cover>.SuccessResult(cover) 
+                : ResponseModel<Cover>.FailureResult("Not found", HttpStatusCode.NotFound);
+        }
     }
 }

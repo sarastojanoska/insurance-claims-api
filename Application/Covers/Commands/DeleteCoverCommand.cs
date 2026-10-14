@@ -6,30 +6,31 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace Application.Covers.Commands;
-
-public record DeleteCoverCommand(string Id) : IRequest<ResponseModel<Cover>>;
-
-public class DeleteCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue,
-    ILogger<DeleteCoverCommandHandler> logger) : IRequestHandler<DeleteCoverCommand, ResponseModel<Cover>>
+namespace Application.Covers.Commands
 {
-    public async Task<ResponseModel<Cover>> Handle(DeleteCoverCommand request, CancellationToken cancellationToken)
+    public record DeleteCoverCommand(string Id) : IRequest<ResponseModel<Cover>>;
+
+    public class DeleteCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue,
+        ILogger<DeleteCoverCommandHandler> logger) : IRequestHandler<DeleteCoverCommand, ResponseModel<Cover>>
     {
-        var result = await coverService.DeleteCoverAsync(request.Id);
-
-        if (!result.Success || result.Data is null)
+        public async Task<ResponseModel<Cover>> Handle(DeleteCoverCommand request, CancellationToken cancellationToken)
         {
-            logger.LogError("Cover not found or delete operation failed.");
-            return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to delete cover");
+            var result = await coverService.DeleteCoverAsync(request.Id);
+
+            if (!result.Success || result.Data is null)
+            {
+                logger.LogError("Cover not found or delete operation failed.");
+                return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to delete cover");
+            }
+
+            await channelQueue.EnqueueAsync(new AuditLog
+            {
+                EntityName = EntityNameEnum.Cover,
+                EntityId = result.Data.Id,
+                Type = HttpRequestTypeEnum.DELETE
+            }, cancellationToken);
+
+            return ResponseModel<Cover>.SuccessResult(result.Data);
         }
-
-        await channelQueue.EnqueueAsync(new AuditLog
-        {
-            EntityName = EntityNameEnum.Cover,
-            EntityId = result.Data.Id,
-            Type = HttpRequestTypeEnum.DELETE
-        }, cancellationToken);
-
-        return ResponseModel<Cover>.SuccessResult(result.Data);
     }
 }

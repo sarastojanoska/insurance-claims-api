@@ -1,6 +1,7 @@
-namespace Application.Models;
-
-public interface IResponseModel
+namespace Application.Models
 {
-    int StatusCode { get; }
+    public interface IResponseModel
+    {
+        int StatusCode { get; }
+    }
 }
