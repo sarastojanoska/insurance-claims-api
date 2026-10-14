@@ -1,0 +1,5 @@
+root = true
+
+[*.cs]
+csharp_style_namespace_declarations = block_scoped
+dotnet_diagnostic.IDE0160.severity = warning

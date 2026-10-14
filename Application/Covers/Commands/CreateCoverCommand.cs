@@ -7,26 +7,27 @@ using Domain.Enums;
 using MediatR;
 using System.Net;
 
-namespace Application.Covers.Commands;
-
-public record CreateCoverCommand(CreateCoverDto Cover) : IRequest<ResponseModel<Cover>>;
-
-public class CreateCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue) : IRequestHandler<CreateCoverCommand, ResponseModel<Cover>>
+namespace Application.Covers.Commands
 {
-    public async Task<ResponseModel<Cover>> Handle(CreateCoverCommand request, CancellationToken cancellationToken)
+    public record CreateCoverCommand(CreateCoverDto Cover) : IRequest<ResponseModel<Cover>>;
+
+    public class CreateCoverCommandHandler(ICoverService coverService, IChannelQueue<AuditLog> channelQueue) : IRequestHandler<CreateCoverCommand, ResponseModel<Cover>>
     {
-        var result = await coverService.CreateCoverAsync(request.Cover);
-
-        if (!result.Success || result.Data is null)
-            return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to create cover");
-
-        await channelQueue.EnqueueAsync(new AuditLog
+        public async Task<ResponseModel<Cover>> Handle(CreateCoverCommand request, CancellationToken cancellationToken)
         {
-            EntityName = EntityNameEnum.Cover,
-            EntityId = result.Data.Id,
-            Type = HttpRequestTypeEnum.POST
-        }, cancellationToken);
+            var result = await coverService.CreateCoverAsync(request.Cover);
 
-        return ResponseModel<Cover>.SuccessResult(result.Data, statusCode: HttpStatusCode.Created);
+            if (!result.Success || result.Data is null)
+                return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to create cover");
+
+            await channelQueue.EnqueueAsync(new AuditLog
+            {
+                EntityName = EntityNameEnum.Cover,
+                EntityId = result.Data.Id,
+                Type = HttpRequestTypeEnum.POST
+            }, cancellationToken);
+
+            return ResponseModel<Cover>.SuccessResult(result.Data, statusCode: HttpStatusCode.Created);
+        }
     }
 }

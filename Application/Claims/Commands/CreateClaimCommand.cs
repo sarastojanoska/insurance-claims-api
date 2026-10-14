@@ -7,26 +7,27 @@ using Domain.Enums;
 using MediatR;
 using System.Net;
 
-namespace Application.Claims.Commands;
-
-public sealed record CreateClaimCommand(CreateClaimDto Claim) : IRequest<ResponseModel<Claim>>;
-
-public sealed class CreateClaimCommandHandler(IClaimService claimService, IChannelQueue<AuditLog> channelQueue) : IRequestHandler<CreateClaimCommand, ResponseModel<Claim>>
+namespace Application.Claims.Commands
 {
-    public async Task<ResponseModel<Claim>> Handle(CreateClaimCommand request, CancellationToken cancellationToken)
+    public sealed record CreateClaimCommand(CreateClaimDto Claim) : IRequest<ResponseModel<Claim>>;
+
+    public sealed class CreateClaimCommandHandler(IClaimService claimService, IChannelQueue<AuditLog> channelQueue) : IRequestHandler<CreateClaimCommand, ResponseModel<Claim>>
     {
-        var result = await claimService.CreateClaimAsync(request.Claim);
-
-        if (!result.Success || result.Data is null)
-            return ResponseModel<Claim>.FailureResult(result.Error ?? "Failed to create claim");
-
-        await channelQueue.EnqueueAsync(new AuditLog
+        public async Task<ResponseModel<Claim>> Handle(CreateClaimCommand request, CancellationToken cancellationToken)
         {
-            EntityName = EntityNameEnum.Claim,
-            EntityId = result.Data.Id,
-            Type = HttpRequestTypeEnum.POST
-        }, cancellationToken);
+            var result = await claimService.CreateClaimAsync(request.Claim);
 
-        return ResponseModel<Claim>.SuccessResult(result.Data, statusCode: HttpStatusCode.Created);
+            if (!result.Success || result.Data is null)
+                return ResponseModel<Claim>.FailureResult(result.Error ?? "Failed to create claim");
+
+            await channelQueue.EnqueueAsync(new AuditLog
+            {
+                EntityName = EntityNameEnum.Claim,
+                EntityId = result.Data.Id,
+                Type = HttpRequestTypeEnum.POST
+            }, cancellationToken);
+
+            return ResponseModel<Claim>.SuccessResult(result.Data, statusCode: HttpStatusCode.Created);
+        }
     }
 }

@@ -2,18 +2,19 @@
 using Infrastructure.Configurations;
 using Microsoft.EntityFrameworkCore;
 
-namespace Infrastructure.Context.AppDbContext;
-
-public class AppDbContext(DbContextOptions options) : DbContext(options)
+namespace Infrastructure.Context.AppDbContext
 {
-    public DbSet<Claim> Claims => Set<Claim>();
-    public DbSet<Cover> Covers => Set<Cover>();
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    public class AppDbContext(DbContextOptions options) : DbContext(options)
     {
-        base.OnModelCreating(modelBuilder);
+        public DbSet<Claim> Claims => Set<Claim>();
+        public DbSet<Cover> Covers => Set<Cover>();
 
-        modelBuilder.ApplyConfiguration(new ClaimConfiguration());
-        modelBuilder.ApplyConfiguration(new CoverConfiguration());
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.ApplyConfiguration(new ClaimConfiguration());
+            modelBuilder.ApplyConfiguration(new CoverConfiguration());
+        }
     }
 }

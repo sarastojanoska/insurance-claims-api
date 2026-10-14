@@ -1,15 +1,16 @@
 using Domain.Entities.BaseEntity;
 using Domain.Enums;
 
-namespace Domain.Entities;
-
-public class Cover : EntityBase
+namespace Domain.Entities
 {
-    public DateTime StartDate { get; set; }
+    public class Cover : EntityBase
+    {
+        public DateTime StartDate { get; set; }
 
-    public DateTime EndDate { get; set; }
+        public DateTime EndDate { get; set; }
 
-    public CoverType Type { get; set; }
+        public CoverType Type { get; set; }
 
-    public decimal Premium { get; set; }
+        public decimal Premium { get; set; }
+    }
 }

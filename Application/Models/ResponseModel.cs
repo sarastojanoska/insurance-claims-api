@@ -4,11 +4,11 @@ namespace Application.Models
 {
     public class ResponseModel<T> : IResponseModel
     {
-        public int StatusCode { get; set; }
-        public bool Success { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public T? Data { get; set; }
-        public List<string> Errors { get; set; } = [];
+        public int StatusCode { get; private set; }
+        public bool Success { get; private set; }
+        public string Message { get; private set; } = string.Empty;
+        public T? Data { get; private set; }
+        public List<string> Errors { get; private set; } = [];
 
         public static ResponseModel<T> SuccessResult(T? data, string message = "Success", HttpStatusCode statusCode = HttpStatusCode.OK)
         {
