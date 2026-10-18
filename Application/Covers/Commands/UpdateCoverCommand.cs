@@ -18,7 +18,7 @@ namespace Application.Covers.Commands
             var result = await coverService.UpdateCoverAsync(request.Id, request.Cover);
 
             if (!result.Success)
-                return ResponseModel<Cover>.FailureResult(result.Error ?? "Cover not found or failed to update.");
+                return ResponseModel<Cover>.FailureResult(result.Error ?? "Cover not found or failed to update.", result.StatusCode);
 
             await channelQueue.EnqueueAsync(new AuditLog
             {
@@ -27,7 +27,7 @@ namespace Application.Covers.Commands
                 Type = HttpRequestTypeEnum.PUT
             }, cancellationToken);
 
-            return ResponseModel<Cover>.SuccessResult(null, statusCode: HttpStatusCode.Accepted);
+            return ResponseModel<Cover>.SuccessResult(null, statusCode: HttpStatusCode.OK);
         }
     }
 }

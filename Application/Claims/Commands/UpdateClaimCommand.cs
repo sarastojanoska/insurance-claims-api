@@ -27,7 +27,7 @@ namespace Application.Claims.Commands
                 Type = HttpRequestTypeEnum.PUT
             }, cancellationToken);
 
-            return ResponseModel<Claim>.SuccessResult(null, statusCode: HttpStatusCode.Accepted);
+            return ResponseModel<Claim>.SuccessResult(null, statusCode: HttpStatusCode.OK);
         }
     }
 }

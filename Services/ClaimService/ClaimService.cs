@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Services.ClaimService
 {
-    public class ClaimService(AppDbContext context, ILogger<ClaimService> logger, TimeProvider? timeProvider = null) : IClaimService
+    public class ClaimService(AppDbContext context, ILogger<ClaimService> logger) : IClaimService
     {
         public async Task<IEnumerable<Claim>> GetClaimsAsync() => await context.Claims.AsNoTracking().ToListAsync();
 
@@ -37,7 +37,7 @@ namespace Services.ClaimService
                 return ServiceResponseModel<Claim>.FailureResult("Cover not found.");
             }
 
-            var createdDate = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+            var createdDate = item.Created;
 
             var validationError = ValidateClaim(
                 item.DamageCost,
@@ -125,6 +125,11 @@ namespace Services.ClaimService
 
         private static string? ValidateClaim(decimal damageCost, DateTime createdDate, DateTime coverStartDate, DateTime coverEndDate)
         {
+            if (damageCost <= 0)
+            {
+                return "DamageCost must be greater than zero.";
+            }
+
             if (damageCost > 100_000)
             {
                 return "DamageCost cannot exceed 100,000.";

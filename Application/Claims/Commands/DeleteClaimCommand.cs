@@ -5,6 +5,7 @@ using Domain.Entities;
 using Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Net;
 
 namespace Application.Claims.Commands
 {
@@ -29,7 +30,7 @@ namespace Application.Claims.Commands
                 Type = HttpRequestTypeEnum.DELETE
             }, cancellationToken);
 
-            return ResponseModel<Claim>.SuccessResult(result.Data);
+            return ResponseModel<Claim>.SuccessResult(null, statusCode: HttpStatusCode.NoContent);
         }
     }
 }

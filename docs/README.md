@@ -141,9 +141,9 @@ Handler response
 ## Implemented Features
 
 - CQRS requests and handlers for all 11 endpoints, including premium computation.
-- Thin controllers that delegate to `ISender.Send`, with no business, audit, or response-mapping logic.
+- Thin controllers that delegate to `ISender.Send`, with no business or audit logic; successful deletes return no content.
 - Service-layer validation for claim and cover creation/update, with exact service error messages preserved by write handlers.
-- A single UTC claim creation timestamp, used both for validation and persistence; an optional `TimeProvider` supports deterministic tests.
+- A required client-supplied claim `created` timestamp, used for both cover-period validation and persistence as `dateCreated`.
 - Progressive decimal premium calculation with clear type multipliers and period discounts. Cover updates recalculate the premium.
 - Audit records for successful POST, PUT, and DELETE operations, using a channel instead of awaiting a SQL insert in the handler.
 - `ResponseModel<T>` envelopes and a global result filter that applies their actual HTTP statuses.
@@ -152,9 +152,9 @@ Handler response
 
 ### Validation and Premium Rules
 
-Claim damage cost cannot exceed 100,000; exactly 100,000 is allowed. The related cover must exist, and the claim creation timestamp must lie within its start/end timestamps, inclusively. Claim updates validate the original creation timestamp, not the update time.
+Claim damage cost must be greater than zero and cannot exceed 100,000; exactly 100,000 is allowed. The related cover must exist, and the client-supplied creation timestamp must lie within its start/end timestamps, inclusively. Claim updates validate the original creation timestamp, not the update time.
 
-Cover start dates cannot precede the server's local current calendar date. End cannot precede start or exceed `startDate.AddYears(1)`. Exactly one calendar year is allowed.
+Cover start dates cannot precede the server's local current calendar date. End cannot precede start or exceed `startDate.AddYears(1)`. Exactly one calendar year is allowed. Undefined cover types are rejected for creation, updates, and premium calculation.
 
 The premium base daily rate is 1250. Multipliers are Yacht 1.10, PassengerShip 1.20, Tanker 1.50, and other types 1.30. The first 30 days use the full rate; the next 150 receive a 5% Yacht or 2% other-type discount; subsequent days receive an 8% Yacht or 3% other-type total discount. Final discounts are additive percentage points, not compounded. Duration uses calendar-day differences and excludes the end date.
 
@@ -162,7 +162,7 @@ The premium base daily rate is 1250. Multipliers are Yacht 1.10, PassengerShip 1
 
 There is no frontend application. Use Swagger's **Try it out**, PowerShell, curl, or an API client. Authentication is not currently required.
 
-Create a currently active cover first, then create a claim using its returned ID. IDs, creation timestamps, and cover premiums are server-generated. Do not invent a cover ID or create a claim against a future cover.
+Create a cover first, then create a claim using its returned ID and a required `created` timestamp within that cover period. Future covers are allowed when the supplied claim timestamp falls within their dates. IDs, cover creation timestamps, and cover premiums are server-generated; claim creation timestamps are client-supplied.
 
 The walkthrough below uses dynamic dates. Set `$baseUrl` to the API endpoint shown by Aspire, or use the standalone URL. Trust the development HTTPS certificate; do not disable TLS validation.
 
@@ -193,6 +193,7 @@ $claimBody = @{
     name = "Engine fire"
     type = "Fire"
     damageCost = 25000
+    created = (Get-Date).ToUniversalTime().ToString("o")
 } | ConvertTo-Json
 $claimResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/claims" -ContentType "application/json" -Body $claimBody
 $claimId = $claimResponse.data.id
@@ -200,7 +201,7 @@ $claimResponse
 Invoke-RestMethod -Method Get -Uri "$baseUrl/api/claims/$claimId"
 Invoke-RestMethod -Method Get -Uri "$baseUrl/api/claims"
 
-# Update all editable claim fields; success returns 202 with null data.
+# Update all editable claim fields; success returns 200 with null data.
 $claimUpdate = @{
     name = "Revised engine fire"
     type = "Fire"
@@ -223,11 +224,11 @@ Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/claims/$claimId"
 Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/covers/$coverId"
 ```
 
-The 30-day Yacht cover costs 41,250. Creation returns 201, updates return 202 after saving, and successful reads/deletes return 200. See [API.md](API.md) for all request schemas and response details.
+The 30-day Yacht cover costs 41,250. Creation returns 201, updates and reads return 200, and successful deletes return 204 with no body. Missing covers return 404 for reads, updates, and deletes. See [API.md](API.md) for all request schemas and response details.
 
 To review validation, submit a claim above 100,000, a cover starting yesterday, or a cover longer than one calendar year. Expect HTTP 400 with the specific service message. PowerShell raises an HTTP error for non-success responses; Swagger displays the status and body directly. Missing claim reads currently return 400, while missing cover reads return 404.
 
-Near midnight in a non-UTC time zone, confirm that the cover timestamps include the server's current UTC claim creation time; local-date and UTC-date conventions can differ. The walkthrough assumes compatible server/client date conventions.
+Near midnight in a non-UTC time zone, confirm that the cover timestamps include the supplied claim creation time; local-date and UTC-date conventions can differ. The walkthrough assumes compatible server/client date conventions.
 
 ### Inspecting Audits
 
@@ -241,10 +242,10 @@ The bounded channel's default capacity is 1000 and its full mode is `Wait`, so r
 - Standalone migration failures: check SQL Server/LocalDB, connection strings, and database creation/migration permissions. MongoDB must also be reachable.
 - HTTPS failures: trust the development certificate and restart the client. Resolve port conflicts by changing launch settings and the client base URL.
 - Swagger is Development-only. Open the API endpoint, not the dashboard endpoint with `/swagger` appended.
-- No authentication, authorization policies, pagination, or explicit lower-bound damage-cost validation is implemented.
-- Cover date changes do not revalidate existing claims. Cover deletion does not explicitly cascade or block when claims exist.
-- Cover validation uses local calendar dates, claim validation uses UTC timestamps, and premiums use calendar-day differences; see [API.md](API.md).
-- Premium computation allows past dates and periods longer than one year. Reversed date ranges currently throw an unhandled exception and may return 500.
+- No authentication, authorization policies, or pagination is implemented.
+- By design, cover date changes preserve existing claims without revalidation. Claims can therefore fall outside the edited period; later claim updates validate against the current cover dates. Cover deletion does not explicitly cascade or block when claims exist.
+- Cover validation uses local calendar dates, claim validation uses supplied timestamps, and premiums use calendar-day differences; see [API.md](API.md).
+- Premium computation allows past dates and periods longer than one year. Reversed calendar-date ranges and undefined cover types return 400.
 - MVC binding errors can return `ValidationProblemDetails`, unlike business failures using `ResponseModel<T>`. There is no general exception-to-envelope mapping.
 - The audit queue is not durable. Enqueueing follows MongoDB persistence and is not protected by an outbox or distributed transaction; pending audits can be lost on process exit.
 - Builds currently report a moderate-severity vulnerability warning for `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.12.0. Dependency remediation is outside this documentation update.

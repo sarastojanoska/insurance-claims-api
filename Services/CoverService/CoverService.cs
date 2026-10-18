@@ -3,9 +3,11 @@ using Application.Models;
 using Application.Services.CoverService;
 using Application.Services.PremiumCalculationService;
 using Domain.Entities;
+using Domain.Enums;
 using Infrastructure.Context.AppDbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Net;
 
 namespace Services.CoverService
 {
@@ -13,9 +15,10 @@ namespace Services.CoverService
     {
         public async Task<ServiceResponseModel<Cover>> CreateCoverAsync(CreateCoverDto cover)
         {
-            var validationError = ValidateCoverDates(
+            var validationError = ValidateCover(
                 cover.StartDate,
-                cover.EndDate);
+                cover.EndDate,
+                cover.Type);
 
             if (validationError is not null)
             {
@@ -59,10 +62,10 @@ namespace Services.CoverService
             if (cover == null)
             {
                 logger.LogWarning("Cover {CoverId} not found.", id);
-                return ServiceResponseModel<Cover>.FailureResult("Cover not found.");
+                return ServiceResponseModel<Cover>.FailureResult("Cover not found.", HttpStatusCode.NotFound);
             }
 
-            var validationError = ValidateCoverDates(item.StartDate, item.EndDate);
+            var validationError = ValidateCover(item.StartDate, item.EndDate, item.Type);
 
             if (validationError is not null)
             {
@@ -89,7 +92,7 @@ namespace Services.CoverService
             if (cover == null)
             {
                 logger.LogWarning("Cover {CoverId} not found.", id);
-                return ServiceResponseModel<Cover>.FailureResult("Cover not found.");
+                return ServiceResponseModel<Cover>.FailureResult("Cover not found.", HttpStatusCode.NotFound);
             }
 
             context.Covers.Remove(cover);
@@ -98,8 +101,13 @@ namespace Services.CoverService
             return ServiceResponseModel<Cover>.SuccessResult(cover);
         }
 
-        private static string? ValidateCoverDates(DateTime startDate, DateTime endDate)
+        private static string? ValidateCover(DateTime startDate, DateTime endDate, CoverType type)
         {
+            if (!Enum.IsDefined(type))
+            {
+                return "Cover type must be a defined value.";
+            }
+
             if (startDate.Date < DateTime.Today)
             {
                 return "StartDate cannot be in the past.";

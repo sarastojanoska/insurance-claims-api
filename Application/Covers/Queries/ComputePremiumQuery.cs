@@ -11,8 +11,15 @@ namespace Application.Covers.Queries
     {
         public Task<ResponseModel<decimal>> Handle(ComputePremiumQuery request, CancellationToken cancellationToken)
         {
-            var premium = premiumCalculationService.ComputePremium(request.StartDate, request.EndDate, request.CoverType);
-            return Task.FromResult(ResponseModel<decimal>.SuccessResult(premium));
+            try
+            {
+                var premium = premiumCalculationService.ComputePremium(request.StartDate, request.EndDate, request.CoverType);
+                return Task.FromResult(ResponseModel<decimal>.SuccessResult(premium));
+            }
+            catch (ArgumentException exception)
+            {
+                return Task.FromResult(ResponseModel<decimal>.FailureResult(exception.Message));
+            }
         }
     }
 }

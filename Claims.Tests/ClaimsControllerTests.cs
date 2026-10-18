@@ -34,7 +34,7 @@ namespace Claims.Tests
             using var client = application.CreateApiClient();
             var cover = await application.CreateCoverAsync(client);
             var created = await application.SendAsync<Claim>(client, HttpMethod.Post, "/api/claims", HttpStatusCode.Created,
-                new CreateClaimDto(cover.Id, "Engine fire", ClaimType.Fire, 100_000m));
+                new CreateClaimDto(cover.Id, "Engine fire", ClaimType.Fire, 100_000m, application.CreatedAt));
             Assert.NotNull(created.Data);
             var claim = created.Data;
             Assert.False(string.IsNullOrWhiteSpace(claim.Id));
@@ -49,7 +49,7 @@ namespace Claims.Tests
             Assert.Equal(claim.Id, Assert.Single(listed.Data!).Id);
             var fetched = await application.SendAsync<Claim>(client, HttpMethod.Get, route, HttpStatusCode.OK);
             Assert.Equal(claim.Name, fetched.Data!.Name);
-            var updated = await application.SendAsync<Claim>(client, HttpMethod.Put, route, HttpStatusCode.Accepted,
+            var updated = await application.SendAsync<Claim>(client, HttpMethod.Put, route, HttpStatusCode.OK,
                 new UpdateClaimDto("Collision damage", ClaimType.Collision, 500m));
             Assert.Null(updated.Data);
             fetched = await application.SendAsync<Claim>(client, HttpMethod.Get, route, HttpStatusCode.OK);
@@ -59,9 +59,9 @@ namespace Claims.Tests
             Assert.Equal(application.CreatedAt, fetched.Data.DateCreated);
             Assert.Equal(cover.Id, fetched.Data.CoverId);
 
-            var deleted = await application.SendAsync<Claim>(client, HttpMethod.Delete, route, HttpStatusCode.OK);
-            Assert.Equal(claim.Id, deleted.Data!.Id);
-            Assert.Equal("Collision damage", deleted.Data.Name);
+            using var deleted = await client.DeleteAsync(route, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+            Assert.Empty(await deleted.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
             await application.SendAsync<Claim>(client, HttpMethod.Get, route, HttpStatusCode.BadRequest);
             listed = await application.SendAsync<Claim[]>(client, HttpMethod.Get, "/api/claims", HttpStatusCode.OK);
             Assert.Empty(listed.Data!);
@@ -73,6 +73,8 @@ namespace Claims.Tests
         [Theory]
         [InlineData("missing-cover", "Cover not found.")]
         [InlineData("excessive-cost", "DamageCost cannot exceed 100,000.")]
+        [InlineData("zero-cost", "DamageCost must be greater than zero.")]
+        [InlineData("negative-cost", "DamageCost must be greater than zero.")]
         [InlineData("before-cover", "Claim creation date must be within the related cover period.")]
         [InlineData("after-cover", "Claim creation date must be within the related cover period.")]
         public async Task Invalid_claim_creation_returns_validation_error_without_persisting_or_auditing(string scenario, string error)
@@ -89,7 +91,8 @@ namespace Claims.Tests
             if (scenario != "missing-cover") await application.SeedAsync(cover);
 
             var response = await application.SendAsync<Claim>(client, HttpMethod.Post, "/api/claims", HttpStatusCode.BadRequest,
-                new CreateClaimDto(cover.Id, "Invalid claim", ClaimType.Fire, scenario == "excessive-cost" ? 100_000.01m : 100m));
+                new CreateClaimDto(cover.Id, "Invalid claim", ClaimType.Fire,
+                    scenario switch { "excessive-cost" => 100_000.01m, "zero-cost" => 0m, "negative-cost" => -1m, _ => 100m }, application.CreatedAt));
             Assert.Equal(error, response.Message);
             Assert.Null(response.Data);
             var listed = await application.SendAsync<Claim[]>(client, HttpMethod.Get, "/api/claims", HttpStatusCode.OK);
@@ -111,13 +114,15 @@ namespace Claims.Tests
             };
             await application.SeedAsync(cover);
             var response = await application.SendAsync<Claim>(client, HttpMethod.Post, "/api/claims", HttpStatusCode.Created,
-                new CreateClaimDto(cover.Id, "Boundary claim", ClaimType.Fire, 100m));
+                new CreateClaimDto(cover.Id, "Boundary claim", ClaimType.Fire, 100m, application.CreatedAt));
             Assert.Equal(application.CreatedAt, response.Data!.DateCreated);
             application.AssertAudits(EntityNameEnum.Claim, response.Data.Id, HttpRequestTypeEnum.POST);
         }
 
         [Theory]
         [InlineData("excessive-cost", "DamageCost cannot exceed 100,000.")]
+        [InlineData("zero-cost", "DamageCost must be greater than zero.")]
+        [InlineData("negative-cost", "DamageCost must be greater than zero.")]
         [InlineData("missing-cover", "Related cover not found.")]
         [InlineData("outside-cover", "Claim creation date must be within the related cover period.")]
         public async Task Invalid_claim_update_preserves_saved_values_and_does_not_audit(string scenario, string error)
@@ -134,7 +139,8 @@ namespace Claims.Tests
             await application.SeedAsync(claim);
             var route = $"/api/claims/{claim.Id}";
             var response = await application.SendAsync<Claim>(client, HttpMethod.Put, route, HttpStatusCode.BadRequest,
-                new UpdateClaimDto("Changed", ClaimType.Collision, scenario == "excessive-cost" ? 100_000.01m : 100m));
+                new UpdateClaimDto("Changed", ClaimType.Collision,
+                    scenario switch { "excessive-cost" => 100_000.01m, "zero-cost" => 0m, "negative-cost" => -1m, _ => 100m }));
             Assert.Equal(error, response.Message);
             var fetched = await application.SendAsync<Claim>(client, HttpMethod.Get, route, HttpStatusCode.OK);
             Assert.Equal("Original", fetched.Data!.Name);
@@ -142,6 +148,36 @@ namespace Claims.Tests
             Assert.Equal(ClaimType.Fire, fetched.Data.Type);
             Assert.Equal(claim.DateCreated, fetched.Data.DateCreated);
             Assert.Empty(application.AuditQueue.Items);
+        }
+
+        [Fact]
+        public async Task Claim_creation_uses_client_date_for_a_future_cover()
+        {
+            using var application = new ApiWebApplicationFactory();
+            using var client = application.CreateApiClient();
+            var startDate = application.CreatedAt.Date.AddDays(7);
+            var cover = await application.SendAsync<Cover>(client, HttpMethod.Post, "/api/covers", HttpStatusCode.Created,
+                new CreateCoverDto(startDate, startDate.AddDays(30), CoverType.Yacht));
+            var created = startDate.AddHours(12);
+            var response = await application.SendAsync<Claim>(client, HttpMethod.Post, "/api/claims", HttpStatusCode.Created,
+                new CreateClaimDto(cover.Data!.Id, "Future claim", ClaimType.Fire, 100m, created));
+            Assert.Equal(created, response.Data!.DateCreated);
+            application.AssertAudits(EntityNameEnum.Claim, response.Data.Id, HttpRequestTypeEnum.POST);
+        }
+
+        [Fact]
+        public async Task Claim_creation_requires_created_in_the_request()
+        {
+            using var application = new ApiWebApplicationFactory();
+            using var client = application.CreateApiClient();
+            var cover = await application.CreateCoverAsync(client);
+            using var response = await client.PostAsJsonAsync("/api/claims",
+                new { coverId = cover.Id, name = "Missing date", type = ClaimType.Fire, damageCost = 100m },
+                TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var listed = await application.SendAsync<Claim[]>(client, HttpMethod.Get, "/api/claims", HttpStatusCode.OK);
+            Assert.Empty(listed.Data!);
+            Assert.DoesNotContain(application.AuditQueue.Items, audit => audit.EntityName == EntityNameEnum.Claim);
         }
 
         [Theory]
