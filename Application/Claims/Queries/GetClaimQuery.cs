@@ -2,6 +2,7 @@ using Application.Models;
 using Application.Services.ClaimService;
 using Domain.Entities;
 using MediatR;
+using System.Net;
 
 namespace Application.Claims.Queries
 {
@@ -15,7 +16,7 @@ namespace Application.Claims.Queries
             var claim = await claimService.GetClaimAsync(request.Id);
             return claim is not null
                 ? ResponseModel<Claim>.SuccessResult(claim)
-                : ResponseModel<Claim>.FailureResult("Claim not found");
+                : ResponseModel<Claim>.FailureResult("Claim not found", HttpStatusCode.NotFound);
         }
     }
 }

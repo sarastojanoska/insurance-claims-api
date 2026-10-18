@@ -18,7 +18,7 @@ namespace Application.Claims.Commands
         {
             var result = await claimService.UpdateClaimAsync(request.Id, request.Claim);
             if (!result.Success)
-                return ResponseModel<Claim>.FailureResult(result.Error ?? "Claim not found or failed to update");
+                return ResponseModel<Claim>.FailureResult(result.Error ?? "Claim not found or failed to update", result.StatusCode);
 
             await channelQueue.EnqueueAsync(new AuditLog
             {

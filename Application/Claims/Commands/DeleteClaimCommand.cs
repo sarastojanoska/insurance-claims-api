@@ -20,7 +20,7 @@ namespace Application.Claims.Commands
             if (!result.Success || result.Data is null)
             {
                 logger.LogWarning("Claim not found or delete operation failed.");
-                return ResponseModel<Claim>.FailureResult(result.Error ?? "Failed to delete the claim");
+                return ResponseModel<Claim>.FailureResult(result.Error ?? "Failed to delete the claim", result.StatusCode);
             }
 
             await channelQueue.EnqueueAsync(new AuditLog

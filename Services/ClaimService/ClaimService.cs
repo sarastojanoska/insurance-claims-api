@@ -5,6 +5,7 @@ using Domain.Entities;
 using Infrastructure.Context.AppDbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Net;
 
 namespace Services.ClaimService
 {
@@ -73,7 +74,7 @@ namespace Services.ClaimService
             if (claim is null)
             {
                 logger.LogWarning("Cannot delete claim {id}: claim was not found.", id);
-                return ServiceResponseModel<Claim>.FailureResult($"Claim with ID '{id}' was not found.");
+                return ServiceResponseModel<Claim>.FailureResult($"Claim with ID '{id}' was not found.", HttpStatusCode.NotFound);
             }
             var result = context.Claims.Remove(claim);
             await context.SaveChangesAsync();
@@ -89,7 +90,7 @@ namespace Services.ClaimService
             if (claim == null)
             {
                 logger.LogWarning("Claim {ClaimId} not found.", id);
-                return ServiceResponseModel<Claim>.FailureResult("Claim not found.");
+                return ServiceResponseModel<Claim>.FailureResult("Claim not found.", HttpStatusCode.NotFound);
             }
 
             var cover = await context.Covers
@@ -99,7 +100,7 @@ namespace Services.ClaimService
             if (cover == null)
             {
                 logger.LogWarning("Cover {CoverId} associated with claim {ClaimId} not found.", claim.CoverId, id);
-                return ServiceResponseModel<Claim>.FailureResult("Related cover not found.");
+                return ServiceResponseModel<Claim>.FailureResult("Related cover not found.", HttpStatusCode.NotFound);
             }
 
             var validationError = ValidateClaim(

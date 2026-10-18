@@ -11,7 +11,7 @@ namespace Infrastructure.Messaging
         {
             var options = new BoundedChannelOptions(capacity)
             {
-                FullMode = BoundedChannelFullMode.Wait  
+                FullMode = BoundedChannelFullMode.Wait
             };
 
             _channel = Channel.CreateBounded<T>(options);

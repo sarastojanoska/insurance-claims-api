@@ -15,3 +15,6 @@ dotnet run --project AppHost/AppHost.csproj --launch-profile https
 ```
 
 Open the API endpoint displayed in the Aspire dashboard and append `/swagger`. The reviewer guide also explains running with your own MongoDB and SQL Server instances.
+
+NOTES:
+- Due to lack of business requirements, updating covers leaves claims in an inconsistent state (outside the time period). This is a known limitation. It will be fixed once clarified requirements are provided.
