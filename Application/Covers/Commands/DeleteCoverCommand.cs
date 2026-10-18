@@ -5,6 +5,7 @@ using Domain.Entities;
 using Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Net;
 
 namespace Application.Covers.Commands
 {
@@ -20,7 +21,7 @@ namespace Application.Covers.Commands
             if (!result.Success || result.Data is null)
             {
                 logger.LogError("Cover not found or delete operation failed.");
-                return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to delete cover");
+                return ResponseModel<Cover>.FailureResult(result.Error ?? "Failed to delete cover", result.StatusCode);
             }
 
             await channelQueue.EnqueueAsync(new AuditLog
@@ -30,7 +31,7 @@ namespace Application.Covers.Commands
                 Type = HttpRequestTypeEnum.DELETE
             }, cancellationToken);
 
-            return ResponseModel<Cover>.SuccessResult(result.Data);
+            return ResponseModel<Cover>.SuccessResult(null, statusCode: HttpStatusCode.NoContent);
         }
     }
 }

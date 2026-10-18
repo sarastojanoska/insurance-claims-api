@@ -11,6 +11,11 @@ namespace Services.PremiumCalculationService
 
         public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
         {
+            if (!Enum.IsDefined(coverType))
+            {
+                throw new ArgumentException("Cover type must be a defined value.", nameof(coverType));
+            }
+
             var insuranceDays = (endDate.Date - startDate.Date).Days;
 
             if (insuranceDays < 0)

@@ -44,6 +44,15 @@ namespace Claims.Tests
         }
 
         [Fact]
+        public void Undefined_cover_type_is_rejected()
+        {
+            var exception = Assert.Throws<ArgumentException>(() =>
+                service.ComputePremium(StartDate, StartDate.AddDays(1), (CoverType)999));
+
+            Assert.Equal("coverType", exception.ParamName);
+        }
+
+        [Fact]
         public void Time_of_day_does_not_change_calendar_day_premium()
         {
             var premium = service.ComputePremium(

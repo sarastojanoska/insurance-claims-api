@@ -39,7 +39,7 @@ namespace Claims.Tests
             Assert.Equal(cover.Premium, fetched.Data!.Premium);
 
             var newEndDate = cover.StartDate.AddDays(60);
-            var updated = await application.SendAsync<Cover>(client, HttpMethod.Put, route, HttpStatusCode.Accepted,
+            var updated = await application.SendAsync<Cover>(client, HttpMethod.Put, route, HttpStatusCode.OK,
                 new UpdateCoverDto(cover.StartDate, newEndDate, CoverType.Tanker));
             Assert.Null(updated.Data);
             fetched = await application.SendAsync<Cover>(client, HttpMethod.Get, route, HttpStatusCode.OK);
@@ -48,9 +48,9 @@ namespace Claims.Tests
             Assert.Equal(111375m, fetched.Data.Premium);
             Assert.Equal(originalCreatedAt, fetched.Data.DateCreated);
 
-            var deleted = await application.SendAsync<Cover>(client, HttpMethod.Delete, route, HttpStatusCode.OK);
-            Assert.Equal(cover.Id, deleted.Data!.Id);
-            Assert.Equal(111375m, deleted.Data.Premium);
+            using var deleted = await client.DeleteAsync(route, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+            Assert.Empty(await deleted.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
             await application.SendAsync<Cover>(client, HttpMethod.Get, route, HttpStatusCode.NotFound);
             listed = await application.SendAsync<Cover[]>(client, HttpMethod.Get, "/api/covers", HttpStatusCode.OK);
             Assert.Empty(listed.Data!);
@@ -62,9 +62,11 @@ namespace Claims.Tests
         [InlineData(false, "past", "StartDate cannot be in the past.")]
         [InlineData(false, "reversed", "EndDate cannot be earlier than StartDate.")]
         [InlineData(false, "too-long", "The insurance period cannot exceed one year.")]
+        [InlineData(false, "undefined-type", "Cover type must be a defined value.")]
         [InlineData(true, "past", "StartDate cannot be in the past.")]
         [InlineData(true, "reversed", "EndDate cannot be earlier than StartDate.")]
         [InlineData(true, "too-long", "The insurance period cannot exceed one year.")]
+        [InlineData(true, "undefined-type", "Cover type must be a defined value.")]
         public async Task Invalid_cover_dates_return_validation_errors_without_saving_or_auditing(
             bool update, string scenario, string error)
         {
@@ -76,12 +78,13 @@ namespace Claims.Tests
             if (scenario == "past") startDate = startDate.AddDays(-1);
             if (scenario == "reversed") endDate = startDate.AddTicks(-1);
             if (scenario == "too-long") endDate = startDate.AddYears(1).AddTicks(1);
+            var type = scenario == "undefined-type" ? (CoverType)999 : CoverType.Tanker;
 
             var response = update
                 ? await application.SendAsync<Cover>(client, HttpMethod.Put, $"/api/covers/{existing!.Id}", HttpStatusCode.BadRequest,
-                    new UpdateCoverDto(startDate, endDate, CoverType.Tanker))
+                    new UpdateCoverDto(startDate, endDate, type))
                 : await application.SendAsync<Cover>(client, HttpMethod.Post, "/api/covers", HttpStatusCode.BadRequest,
-                    new CreateCoverDto(startDate, endDate, CoverType.Tanker));
+                    new CreateCoverDto(startDate, endDate, type));
             Assert.Equal(error, response.Message);
             Assert.Null(response.Data);
             var listed = await application.SendAsync<Cover[]>(client, HttpMethod.Get, "/api/covers", HttpStatusCode.OK);
@@ -122,8 +125,8 @@ namespace Claims.Tests
 
         [Theory]
         [InlineData("GET", HttpStatusCode.NotFound, "Not found")]
-        [InlineData("PUT", HttpStatusCode.BadRequest, "Cover not found.")]
-        [InlineData("DELETE", HttpStatusCode.BadRequest, "Cover not found.")]
+        [InlineData("PUT", HttpStatusCode.NotFound, "Cover not found.")]
+        [InlineData("DELETE", HttpStatusCode.NotFound, "Cover not found.")]
         public async Task Missing_cover_returns_the_documented_status_without_auditing(string method, HttpStatusCode status, string error)
         {
             using var application = new ApiWebApplicationFactory();
@@ -149,6 +152,30 @@ namespace Claims.Tests
             var route = $"/api/covers/compute?startDate={startDate:yyyy-MM-dd}&endDate={startDate.AddDays(31):yyyy-MM-dd}&coverType={type}";
             var response = await application.SendAsync<decimal>(client, HttpMethod.Post, route, HttpStatusCode.OK);
             Assert.Equal(decimal.Parse(expectedPremium, System.Globalization.CultureInfo.InvariantCulture), response.Data);
+            var listed = await application.SendAsync<Cover[]>(client, HttpMethod.Get, "/api/covers", HttpStatusCode.OK);
+            Assert.Empty(listed.Data!);
+            Assert.Empty(application.AuditQueue.Items);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task Invalid_premium_input_returns_bad_request_without_saving_or_auditing(bool reversedDates)
+        {
+            using var application = new ApiWebApplicationFactory();
+            using var client = application.CreateApiClient();
+            var startDate = application.CreatedAt.Date;
+            var endDate = reversedDates ? startDate.AddDays(-1) : startDate.AddDays(1);
+            var type = reversedDates ? CoverType.Yacht : (CoverType)999;
+            using var response = await client.PostAsync(
+                $"/api/covers/compute?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}&coverType={(int)type}", null,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            if (reversedDates)
+                Assert.Contains("End date cannot be earlier", body.GetProperty("message").GetString());
+            else
+                Assert.True(body.GetProperty("errors").EnumerateObject().Any());
             var listed = await application.SendAsync<Cover[]>(client, HttpMethod.Get, "/api/covers", HttpStatusCode.OK);
             Assert.Empty(listed.Data!);
             Assert.Empty(application.AuditQueue.Items);

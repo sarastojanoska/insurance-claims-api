@@ -16,6 +16,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -96,9 +97,9 @@ namespace Claims.Tests
             await AssertHttpResponseAsync<Claim>(await client.PostAsJsonAsync("/api/claims", fixture.Claims.CreateDto, cancellationToken),
                 success ? HttpStatusCode.Created : HttpStatusCode.BadRequest, success, fixture.Claims.CreateResult.Error);
             await AssertHttpResponseAsync<Claim>(await client.PutAsJsonAsync($"/api/claims/{fixture.Claims.Item.Id}", fixture.Claims.UpdateDto, cancellationToken),
-                success ? HttpStatusCode.Accepted : HttpStatusCode.BadRequest, success, fixture.Claims.WriteResult.Error);
-            await AssertHttpResponseAsync<Claim>(await client.DeleteAsync($"/api/claims/{fixture.Claims.Item.Id}", cancellationToken),
                 success ? HttpStatusCode.OK : HttpStatusCode.BadRequest, success, fixture.Claims.WriteResult.Error);
+            await AssertHttpResponseAsync<Claim>(await client.DeleteAsync($"/api/claims/{fixture.Claims.Item.Id}", cancellationToken),
+                success ? HttpStatusCode.NoContent : HttpStatusCode.BadRequest, success, fixture.Claims.WriteResult.Error);
 
             await AssertHttpResponseAsync<IEnumerable<Cover>>(await client.GetAsync("/api/covers", cancellationToken), HttpStatusCode.OK, true);
             await AssertHttpResponseAsync<Cover>(await client.GetAsync($"/api/covers/{fixture.Covers.Item.Id}", cancellationToken),
@@ -106,9 +107,9 @@ namespace Claims.Tests
             await AssertHttpResponseAsync<Cover>(await client.PostAsJsonAsync("/api/covers", fixture.Covers.CreateDto, cancellationToken),
                 success ? HttpStatusCode.Created : HttpStatusCode.BadRequest, success, fixture.Covers.WriteResult.Error);
             await AssertHttpResponseAsync<Cover>(await client.PutAsJsonAsync($"/api/covers/{fixture.Covers.Item.Id}", fixture.Covers.UpdateDto, cancellationToken),
-                success ? HttpStatusCode.Accepted : HttpStatusCode.BadRequest, success, fixture.Covers.WriteResult.Error);
-            await AssertHttpResponseAsync<Cover>(await client.DeleteAsync($"/api/covers/{fixture.Covers.Item.Id}", cancellationToken),
                 success ? HttpStatusCode.OK : HttpStatusCode.BadRequest, success, fixture.Covers.WriteResult.Error);
+            await AssertHttpResponseAsync<Cover>(await client.DeleteAsync($"/api/covers/{fixture.Covers.Item.Id}", cancellationToken),
+                success ? HttpStatusCode.NoContent : HttpStatusCode.BadRequest, success, fixture.Covers.WriteResult.Error);
             var premiumDto = fixture.Covers.CreateDto;
             using var premiumRequest = new HttpRequestMessage(HttpMethod.Post,
                 $"/api/covers/compute?startDate={premiumDto.StartDate:yyyy-MM-dd}&endDate={premiumDto.EndDate:yyyy-MM-dd}&coverType=Yacht");
@@ -123,6 +124,11 @@ namespace Claims.Tests
             using (response)
             {
                 Assert.Equal(expectedStatus, response.StatusCode);
+                if (expectedStatus == HttpStatusCode.NoContent)
+                {
+                    Assert.Empty(await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
+                    return ResponseModel<T>.SuccessResult(default, statusCode: HttpStatusCode.NoContent);
+                }
                 var model = await response.Content.ReadFromJsonAsync<ResponseModel<T>>(TestContext.Current.CancellationToken);
                 Assert.NotNull(model);
                 Assert.Equal((int)expectedStatus, model.StatusCode);
@@ -155,11 +161,11 @@ namespace Claims.Tests
             Assert.Same(success ? fixture.Claims.Item : null, created.Data);
             var updated = (await controller.UpdateAsync(fixture.Claims.Item.Id, fixture.Claims.UpdateDto, cancellationToken)).Value!;
             Assert.Equal(success, updated.Success);
-            Assert.Equal(success ? 202 : 400, updated.StatusCode);
+            Assert.Equal(success ? 200 : 400, updated.StatusCode);
             Assert.Null(updated.Data);
-            var deleted = (await controller.DeleteAsync(fixture.Claims.Item.Id, cancellationToken)).Value!;
-            Assert.Equal(success, deleted.Success);
-            Assert.Same(success ? fixture.Claims.Item : null, deleted.Data);
+            var deleted = await controller.DeleteAsync(fixture.Claims.Item.Id, cancellationToken);
+            if (success) Assert.IsType<NoContentResult>(deleted.Result);
+            else Assert.False(deleted.Value!.Success);
 
             AssertAudits(fixture.Queue, success, EntityNameEnum.Claim, fixture.Claims.Item.Id);
             Assert.Equal(5, fixture.Claims.Calls);
@@ -193,11 +199,11 @@ namespace Claims.Tests
             Assert.Same(success ? fixture.Covers.Item : null, created.Data);
             var updated = (await controller.UpdateAsync(fixture.Covers.Item.Id, fixture.Covers.UpdateDto, cancellationToken)).Value!;
             Assert.Equal(success, updated.Success);
-            Assert.Equal(success ? 202 : 400, updated.StatusCode);
+            Assert.Equal(success ? 200 : 400, updated.StatusCode);
             Assert.Null(updated.Data);
-            var deleted = (await controller.DeleteAsync(fixture.Covers.Item.Id, cancellationToken)).Value!;
-            Assert.Equal(success, deleted.Success);
-            Assert.Same(success ? fixture.Covers.Item : null, deleted.Data);
+            var deleted = await controller.DeleteAsync(fixture.Covers.Item.Id, cancellationToken);
+            if (success) Assert.IsType<NoContentResult>(deleted.Result);
+            else Assert.False(deleted.Value!.Success);
 
             AssertAudits(fixture.Queue, success, EntityNameEnum.Cover, fixture.Covers.Item.Id);
             Assert.Equal(5, fixture.Covers.Calls);
@@ -239,12 +245,13 @@ namespace Claims.Tests
             Assert.Equal(success ? "Success" : fixture.Claims.CreateResult.Error, createdClaim.Message);
             var updatedClaim = await fixture.Sender.Send(new UpdateClaimCommand(fixture.Claims.Item.Id, fixture.Claims.UpdateDto), cancellationToken);
             Assert.Equal(success, updatedClaim.Success);
-            Assert.Equal(success ? 202 : 400, updatedClaim.StatusCode);
+            Assert.Equal(success ? 200 : 400, updatedClaim.StatusCode);
             Assert.Null(updatedClaim.Data);
             Assert.Equal(success ? "Success" : fixture.Claims.WriteResult.Error, updatedClaim.Message);
             var deletedClaim = await fixture.Sender.Send(new DeleteClaimCommand(fixture.Claims.Item.Id), cancellationToken);
             Assert.Equal(success, deletedClaim.Success);
-            Assert.Same(success ? fixture.Claims.Item : null, deletedClaim.Data);
+            Assert.Equal(success ? 204 : 400, deletedClaim.StatusCode);
+            Assert.Null(deletedClaim.Data);
             Assert.Equal(success ? "Success" : fixture.Claims.WriteResult.Error, deletedClaim.Message);
             AssertAudits(fixture.Queue, success, EntityNameEnum.Claim, fixture.Claims.Item.Id);
             fixture.Queue.Items.Clear();
@@ -256,12 +263,13 @@ namespace Claims.Tests
             Assert.Equal(success ? "Success" : fixture.Covers.WriteResult.Error, createdCover.Message);
             var updatedCover = await fixture.Sender.Send(new UpdateCoverCommand(fixture.Covers.Item.Id, fixture.Covers.UpdateDto), cancellationToken);
             Assert.Equal(success, updatedCover.Success);
-            Assert.Equal(success ? 202 : 400, updatedCover.StatusCode);
+            Assert.Equal(success ? 200 : 400, updatedCover.StatusCode);
             Assert.Null(updatedCover.Data);
             Assert.Equal(success ? "Success" : fixture.Covers.WriteResult.Error, updatedCover.Message);
             var deletedCover = await fixture.Sender.Send(new DeleteCoverCommand(fixture.Covers.Item.Id), cancellationToken);
             Assert.Equal(success, deletedCover.Success);
-            Assert.Same(success ? fixture.Covers.Item : null, deletedCover.Data);
+            Assert.Equal(success ? 204 : 400, deletedCover.StatusCode);
+            Assert.Null(deletedCover.Data);
             Assert.Equal(success ? "Success" : fixture.Covers.WriteResult.Error, deletedCover.Message);
             AssertAudits(fixture.Queue, success, EntityNameEnum.Cover, fixture.Covers.Item.Id);
 
@@ -322,7 +330,7 @@ namespace Claims.Tests
         {
             public Claim Item { get; } = new() { CoverId = "cover-id", Name = "claim" };
             public IEnumerable<Claim> Items { get; } = new[] { new Claim { CoverId = "cover-id", Name = "listed claim" } };
-            public CreateClaimDto CreateDto { get; } = new("cover-id", "claim", ClaimType.Fire, 100m);
+            public CreateClaimDto CreateDto { get; } = new("cover-id", "claim", ClaimType.Fire, 100m, DateTime.Today);
             public UpdateClaimDto UpdateDto { get; } = new("updated claim", ClaimType.Collision, 200m);
             public ServiceResponseModel<Claim?> CreateResult => createResult ??= success
                 ? ServiceResponseModel<Claim?>.SuccessResult(Item)

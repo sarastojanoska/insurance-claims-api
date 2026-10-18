@@ -1,4 +1,5 @@
-﻿
+﻿using System.Net;
+
 namespace Application.Models
 {
     public class ServiceResponseModel<T>
@@ -6,9 +7,11 @@ namespace Application.Models
         public bool Success { get; private set; }
         public T? Data { get; private set; }
         public string? Error { get; private set; }
+        public HttpStatusCode StatusCode { get; private set; } = HttpStatusCode.OK;
 
         public static ServiceResponseModel<T> SuccessResult(T data) => new() { Success = true, Data = data };
 
-        public static ServiceResponseModel<T> FailureResult(string error) => new() { Success = false, Error = error };
+        public static ServiceResponseModel<T> FailureResult(string error, HttpStatusCode statusCode = HttpStatusCode.BadRequest)
+            => new() { Success = false, Error = error, StatusCode = statusCode };
     }
 }
